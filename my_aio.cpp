@@ -210,6 +210,92 @@ int Aio::my_aio_write(int fd, void* buf, ssize_t count)
 }
 
 
+int Aio::my_aio_signal_read(int fd, void* buf, ssize_t count)
+{
+    int rc = -1;
+    struct sigaction sig_act;
+    struct aiocb my_aiocb;
+    sigemptyset(&sig_act.sa_mask);
+    sig_act.sa_flags = SA_SIGINFO;
+    sig_act.sa_sigaction = aio_completion_handler;
+
+    /* Set up the AIO request */
+    bzero( (char *)&my_aiocb, sizeof(struct aiocb) );
+    my_aiocb.aio_fildes = fd;
+    my_aiocb.aio_buf = malloc(BUFSIZE+1);
+    my_aiocb.aio_nbytes = BUFSIZE;
+    my_aiocb.aio_offset = 0;
+
+    /* Link the AIO request with the Signal Handler */
+    my_aiocb.aio_sigevent.sigev_notify = SIGEV_SIGNAL;
+    my_aiocb.aio_sigevent.sigev_signo = SIGIO;
+    my_aiocb.aio_sigevent.sigev_value.sival_ptr = &my_aiocb;
+
+    /* Map the Signal to the Signal Handler */
+    rc = sigaction( SIGIO, &sig_act, NULL );
+    rc = aio_read(&my_aiocb);
+    sleep(5);
+
+    return 0;
+}
+
+void Aio::aio_completion_handler( int signo, siginfo_t *info, void *context )
+{
+    int rc = -1;
+    struct aiocb *req;
+
+    /* Ensure it's our signal */
+    if (info->si_signo == SIGIO) {
+        req = (struct aiocb *)info->si_value.sival_ptr;
+        /* Did the request complete? */
+        if (aio_error( req ) == 0) {
+              /* Request completed successfully, get the return status */
+            if ((rc = aio_return( req )) > 0) 
+                printf("select retured, read %d byte\n%s\n", (int)rc, (char*)req->aio_buf);
+            else 
+                printf("read failed, rc:%d, errno:%d\n", (int)rc, errno);
+        }
+    }
+  return;
+}
+
+int Aio::my_aio_thread_read(int fd, void* buf, ssize_t count)
+{
+    int rc = -1;
+    struct aiocb my_aiocb;
+    bzero((char*)&my_aiocb, sizeof(struct aiocb));
+    my_aiocb.aio_fildes = fd;
+    my_aiocb.aio_buf = new char[BUFSIZE + 1];
+    my_aiocb.aio_nbytes = BUFSIZE;
+    my_aiocb.aio_offset = 0;
+
+
+    my_aiocb.aio_sigevent.sigev_notify = SIGEV_THREAD;
+    my_aiocb.aio_sigevent.sigev_notify_function = aio_thread_handler;
+    my_aiocb.aio_sigevent.sigev_notify_attributes = NULL;
+    my_aiocb.aio_sigevent.sigev_value.sival_ptr = &my_aiocb;
+
+    rc = aio_read(&my_aiocb);
+    sleep(3);
+}
+
+void Aio::aio_thread_handler(sigval_t sigval)
+{
+    int rc = -1;
+    struct aiocb *req;
+    req = (struct aiocb *)sigval.sival_ptr;
+    /* Did the request complete? */
+    if (aio_error( req ) == 0) 
+    {
+        /* Request completed successfully, get the return status */
+        if ((rc = aio_return(req)) > 0) 
+            printf("select retured, read %d byte\n%s\n", (int)rc, (char*)req->aio_buf);
+        else 
+            printf("read failed, rc:%d, errno:%d\n", (int)rc, errno);
+    }
+
+  return;
+}
 int Aio::sio_unblock_open(const char* path)
 {
 

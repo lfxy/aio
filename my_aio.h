@@ -3,6 +3,7 @@
 
 #include <sys/types.h>  
 #include <vector>
+#include <signal.h>
 
 class Aio
 {
@@ -21,6 +22,11 @@ class Aio
         int my_aio_read_single_test(int fd, void* buf, ssize_t count);
         int my_aio_read_list_test();
         int my_aio_write(int fd, void* buf, ssize_t count);
+
+        int my_aio_signal_read(int fd, void* buf, ssize_t count);
+        static void aio_completion_handler( int signo, siginfo_t *info, void *context );
+        int my_aio_thread_read(int fd, void* buf, ssize_t count);
+        static void aio_thread_handler(sigval_t sigval);
 
         int sio_unblock_open(const char* path);
         int sio_unblock_read(int fd, void* buf, ssize_t count);
